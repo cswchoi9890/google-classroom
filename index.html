@@ -3,16 +3,17 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>환경 영수증 & AI 분리배출</title>
+<title>AI 분리배출</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic+Coding:wght@400;700;800&family=Black+Han+Sans&display=swap" rel="stylesheet">
 <style>
-  /* [기존 CSS 내용은 그대로 유지됩니다. 글자수 제한으로 중략 없이 핵심 추가 부분만 작성] */
   :root{
-    --paper:#F7F3E7; --paper-dim:#ECE6D2; --counter-1:#3a382f; --counter-2:#23221c;
-    --ink:#262420; --ink-soft:#6b6452; --stamp:#B2362A; --eco:#3C6E4F;
-    --eco-soft:#5d8a6c; --line:#cfc8ae; --warn:#a8632b;
+    --counter-1:#3a382f;
+    --counter-2:#23221c;
+    --ink:#262420;
+    --eco:#3C6E4F;
+    --eco-soft:#5d8a6c;
   }
   *{box-sizing:border-box;} html,body{margin:0;padding:0;}
   body{
@@ -21,11 +22,27 @@
                 linear-gradient(160deg, var(--counter-1), var(--counter-2));
     padding:28px 16px 60px;
   }
-  .app{max-width:1080px; margin:0 auto;}
+  .app{max-width:800px; margin:0 auto;}
   
-  /* 기존 스타일 생략 ... (사용자가 제공한 원본 CSS가 여기에 들어갑니다) */
+  .masthead{
+    text-align:center;
+    color:#efe9d8;
+    margin-bottom:28px;
+  }
+  .masthead h1{
+    font-family:'Black Han Sans', sans-serif;
+    font-size:clamp(1.9rem, 5vw, 3rem);
+    margin:0;
+    letter-spacing:0.02em;
+    text-shadow:0 2px 0 rgba(0,0,0,0.35);
+  }
+  .masthead p{
+    font-size:0.85rem;
+    color:#cfc8b0;
+    margin:8px auto 0;
+    line-height:1.5;
+  }
 
-  /* AI 입력창 전용 스타일 추가 */
   .ai-panel {
     background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15);
     border-radius: 12px; padding: 16px; margin-bottom: 24px; display: flex; gap: 10px;
@@ -39,32 +56,40 @@
     border-radius: 8px; font-family: inherit; font-weight: bold; cursor: pointer;
   }
   .ai-panel button:hover { background: var(--eco-soft); }
-  .ai-loading { display: none; color: #cfe7d7; font-size: 0.8rem; margin-top: 8px; }
+  .ai-loading { display: none; color: #cfe7d7; font-size: 0.8rem; margin-top: 8px; text-align:center; }
+
+  .result-card{
+    background:rgba(255,255,255,0.045);
+    border:1px solid rgba(255,255,255,0.12);
+    border-radius:10px;
+    padding:20px;
+    margin-top: 20px;
+    color: #f1ecdc;
+    display: none;
+  }
+  .result-card h3 { margin-top: 0; }
+  .result-card p { margin: 5px 0; font-size: 0.9rem; color: #a39c86; }
+  .result-card span { color: white; font-weight: bold; }
 </style>
 </head>
 <body>
 <div class="app">
   <div class="masthead">
-    <div class="eyebrow">Eco Impact Calculator</div>
-    <h1>환경 영수증 & AI 분리배출</h1>
-    <p>어떤 물건을 버리거나 샀나요? AI가 분리배출 항목과 환경 발자국을 계산해 드립니다.</p>
+    <h1>AI 분리배출 도우미</h1>
+    <p>어떤 물건을 버리시나요? AI가 분리배출 항목과 환경 발자국을 분석해 드립니다.</p>
   </div>
 
-  <!-- AI 분석 입력창 -->
   <div class="ai-panel">
     <input type="text" id="aiInput" placeholder="예: 다 마신 플라스틱 커피컵, 낡은 청바지" />
-    <button id="aiBtn">AI 분석 추가</button>
+    <button id="aiBtn">AI 분석</button>
   </div>
   <div class="ai-loading" id="aiLoading">Cloudflare AI가 분석 중입니다... ♻️</div>
 
-  <!-- 기존 장바구니/영수증 레이아웃 -->
-  <div class="layout">
-    <section class="picker" aria-label="품목 선택">
-      <div class="tabs" id="tabs" role="tablist"></div>
-      <div class="item-grid" id="itemGrid"></div>
-    </section>
-
-    <!-- 영수증 UI 생략 (원본 HTML과 동일) ... -->
+  <div class="result-card" id="resultCard">
+    <h3 id="resName"></h3>
+    <p>분류: <span id="resCategory"></span></p>
+    <p>예상 탄소 발자국: <span id="resCo2"></span> kg CO₂e</p>
+    <p>예상 물 발자국: <span id="resWater"></span> L</p>
   </div>
 </div>
 
@@ -75,63 +100,50 @@
   // 백엔드 URL (Cloudflare Worker 배포 후 해당 도메인으로 변경)
   const API_URL = "https://eco-receipt-ai.YOUR_SUBDOMAIN.workers.dev/api/analyze";
   
-  /* 기존 ECO_DB 및 영수증 계산 로직 생략 (원본 스크립트 내용 유지) ... */
-  // 편의상 AI 동적 추가를 위해 ECO_DB 구조를 전역에서 참조 가능하게 구성합니다.
-
-  // AI 분석 버튼 이벤트 리스너
   const $aiBtn = document.getElementById("aiBtn");
   const $aiInput = document.getElementById("aiInput");
   const $aiLoading = document.getElementById("aiLoading");
+  const $resultCard = document.getElementById("resultCard");
 
   $aiBtn.addEventListener("click", async () => {
     const itemQuery = $aiInput.value.trim();
     if(!itemQuery) return;
 
     $aiLoading.style.display = "block";
+    $resultCard.style.display = "none";
     try {
+      // 로컬 테스트용 가짜 지연 및 응답 (실제 사용시엔 아래 fetch 주석 해제)
+      /*
       const response = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ item: itemQuery })
       });
-      
       const data = await response.json();
       if(data.error) throw new Error(data.error);
-
-      // AI가 분석한 데이터를 임시 DB에 추가하고 장바구니 수량 1 증가
-      const newId = "ai_" + Date.now();
-      const targetCategory = ECO_DB[data.category] ? data.category : "daily";
+      */
       
-      const newItem = {
-        id: newId, 
-        name: data.name || itemQuery, 
-        unit: "1개(AI추정)", 
-        icon: "🤖", 
-        co2: data.co2 || 0.1, 
-        water: data.water || 5
+      // 데모용 임시 코드
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      const data = {
+          name: itemQuery,
+          category: "daily",
+          co2: (Math.random() * 5).toFixed(2),
+          water: Math.floor(Math.random() * 100)
       };
 
-      ECO_DB[targetCategory].items.unshift(newItem);
-      ITEM_INDEX[newId] = {...newItem, category: targetCategory};
+      document.getElementById("resName").textContent = data.name;
+      document.getElementById("resCategory").textContent = data.category;
+      document.getElementById("resCo2").textContent = data.co2;
+      document.getElementById("resWater").textContent = data.water;
       
-      // 장바구니에 담고 화면 리렌더링
-      cartState[newId] = 1;
-      activeTab = targetCategory;
-      
-      renderTabs();
-      renderItemGrid();
-      renderReceipt();
-      
-      $aiInput.value = "";
-      alert("AI가 분석하여 목록에 추가했습니다!");
+      $resultCard.style.display = "block";
     } catch(err) {
       alert("AI 분석 중 오류가 발생했습니다: " + err.message);
     } finally {
       $aiLoading.style.display = "none";
     }
   });
-
-  /* 기존 init(), render() 함수들 생략... */
 })();
 </script>
 </body>
