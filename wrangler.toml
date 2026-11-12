@@ -1,0 +1,11 @@
+name = "eco-receipt-ai"
+main = "src/index.ts"
+compatibility_date = "2024-02-28"
+
+# Cloudflare AI 바인딩 설정
+[ai]
+binding = "AI"
+
+[vars]
+# 연동할 깃허브 저장소
+GITHUB_REPO = "https://github.com/choichoi3227-crypto/cloud-press.git"
