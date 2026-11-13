@@ -1,4 +1,3 @@
-
 export interface Env {
   AI: any;
   GITHUB_REPO: string;
@@ -20,19 +19,30 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/api/analyze") {
       try {
-        const { item } = await request.json() as { item: string };
+        const formData = await request.formData();
+        const imageFile = formData.get("image") as File;
+        
+        if (!imageFile) {
+           return new Response(JSON.stringify({ error: "이미지 파일이 제공되지 않았습니다." }), { 
+             status: 400, headers: corsHeaders 
+           });
+        }
+
+        const imageArrayBuffer = await imageFile.arrayBuffer();
+        const imageBytes = [...new Uint8Array(imageArrayBuffer)];
         
         const systemPrompt = `
-          You are an eco-friendly waste sorting AI. 
-          The user is disposing of or buying: "${item}". 
+          Analyze this image. Identify the main waste or object being disposed of. 
           Classify it into one of these categories: food, clothing, electronics, daily, transport.
           Estimate the Carbon Footprint (kg CO2e) and Water Footprint (Liters).
           Respond ONLY in strict JSON format:
-          {"category": "daily", "co2": 0.5, "water": 10, "name": "Translated name in Korean"}
+          {"category": "daily", "co2": 0.5, "water": 10, "name": "Korean name of the item"}
         `;
 
-        const aiResponse = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
-          messages: [{ role: "user", content: systemPrompt }]
+        // Cloudflare Vision 모델 호출
+        const aiResponse = await env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", {
+          image: imageBytes,
+          prompt: systemPrompt
         });
 
         const text = aiResponse.response;

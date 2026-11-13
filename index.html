@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>AI 분리배출</title>
+<title>AI 분리배출 (이미지 분석)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic+Coding:wght@400;700;800&family=Black+Han+Sans&display=swap" rel="stylesheet">
@@ -45,49 +45,73 @@
 
   .ai-panel {
     background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15);
-    border-radius: 12px; padding: 16px; margin-bottom: 24px; display: flex; gap: 10px;
+    border-radius: 12px; padding: 16px; margin-bottom: 24px; 
+    display: flex; flex-direction: column; gap: 15px; align-items: center;
   }
-  .ai-panel input {
-    flex: 1; padding: 12px; border-radius: 8px; border: none; background: rgba(255,255,255,0.9);
-    font-family: inherit; font-size: 0.9rem;
+  
+  .file-input-wrapper {
+    width: 100%; display: flex; gap: 10px;
   }
-  .ai-panel button {
+  .file-input-wrapper input[type="file"] {
+    flex: 1; padding: 10px; border-radius: 8px; border: 1px dashed rgba(255,255,255,0.4); 
+    background: rgba(255,255,255,0.1); color: #fff; cursor: pointer;
+  }
+  .file-input-wrapper button {
     background: var(--eco); color: white; border: none; padding: 0 20px;
     border-radius: 8px; font-family: inherit; font-weight: bold; cursor: pointer;
+    white-space: nowrap;
   }
-  .ai-panel button:hover { background: var(--eco-soft); }
-  .ai-loading { display: none; color: #cfe7d7; font-size: 0.8rem; margin-top: 8px; text-align:center; }
+  .file-input-wrapper button:hover { background: var(--eco-soft); }
+  
+  #imagePreviewContainer {
+    display: none; width: 100%; text-align: center;
+    background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px;
+  }
+  #previewImg {
+    max-width: 100%; max-height: 250px; border-radius: 8px; object-fit: contain;
+  }
+
+  .ai-loading { display: none; color: #cfe7d7; font-size: 0.8rem; text-align:center; }
 
   .result-card{
     background:rgba(255,255,255,0.045);
     border:1px solid rgba(255,255,255,0.12);
     border-radius:10px;
     padding:20px;
-    margin-top: 20px;
     color: #f1ecdc;
     display: none;
+    text-align: center;
   }
-  .result-card h3 { margin-top: 0; }
-  .result-card p { margin: 5px 0; font-size: 0.9rem; color: #a39c86; }
+  .result-card h3 { margin-top: 0; font-size: 1.4rem; color: #fff; }
+  .result-card p { margin: 8px 0; font-size: 0.95rem; color: #a39c86; }
   .result-card span { color: white; font-weight: bold; }
+  .category-badge {
+    display: inline-block; padding: 4px 12px; background: var(--eco); 
+    border-radius: 12px; font-size: 0.8rem; font-weight: bold; color: white; margin-bottom: 10px;
+  }
 </style>
 </head>
 <body>
 <div class="app">
   <div class="masthead">
     <h1>AI 분리배출 도우미</h1>
-    <p>어떤 물건을 버리시나요? AI가 분리배출 항목과 환경 발자국을 분석해 드립니다.</p>
+    <p>버릴 물건의 사진을 업로드해주세요. AI가 이미지를 분석해 분리배출 방법을 알려드립니다.</p>
   </div>
 
   <div class="ai-panel">
-    <input type="text" id="aiInput" placeholder="예: 다 마신 플라스틱 커피컵, 낡은 청바지" />
-    <button id="aiBtn">AI 분석</button>
+    <div class="file-input-wrapper">
+      <input type="file" id="imageInput" accept="image/*" />
+      <button id="aiBtn">이미지 분석</button>
+    </div>
+    <div id="imagePreviewContainer">
+      <img id="previewImg" alt="미리보기" />
+    </div>
+    <div class="ai-loading" id="aiLoading">Cloudflare Vision AI가 이미지를 분석 중입니다... ♻️</div>
   </div>
-  <div class="ai-loading" id="aiLoading">Cloudflare AI가 분석 중입니다... ♻️</div>
 
   <div class="result-card" id="resultCard">
+    <div class="category-badge" id="resCategory"></div>
     <h3 id="resName"></h3>
-    <p>분류: <span id="resCategory"></span></p>
     <p>예상 탄소 발자국: <span id="resCo2"></span> kg CO₂e</p>
     <p>예상 물 발자국: <span id="resWater"></span> L</p>
   </div>
@@ -100,36 +124,61 @@
   // 백엔드 URL (Cloudflare Worker 배포 후 해당 도메인으로 변경)
   const API_URL = "https://eco-receipt-ai.YOUR_SUBDOMAIN.workers.dev/api/analyze";
   
+  const $imageInput = document.getElementById("imageInput");
+  const $previewContainer = document.getElementById("imagePreviewContainer");
+  const $previewImg = document.getElementById("previewImg");
   const $aiBtn = document.getElementById("aiBtn");
-  const $aiInput = document.getElementById("aiInput");
   const $aiLoading = document.getElementById("aiLoading");
   const $resultCard = document.getElementById("resultCard");
 
+  // 이미지 미리보기 처리
+  $imageInput.addEventListener("change", () => {
+    const file = $imageInput.files[0];
+    if(file) {
+      $previewImg.src = URL.createObjectURL(file);
+      $previewContainer.style.display = "block";
+      $resultCard.style.display = "none";
+    } else {
+      $previewContainer.style.display = "none";
+    }
+  });
+
   $aiBtn.addEventListener("click", async () => {
-    const itemQuery = $aiInput.value.trim();
-    if(!itemQuery) return;
+    const file = $imageInput.files[0];
+    if(!file) {
+      alert("먼저 분석할 이미지를 업로드해주세요.");
+      return;
+    }
 
     $aiLoading.style.display = "block";
     $resultCard.style.display = "none";
+
     try {
-      // 로컬 테스트용 가짜 지연 및 응답 (실제 사용시엔 아래 fetch 주석 해제)
+      // 로컬 테스트용 데모 코드 (실제 배포 시엔 아래의 주석 처리된 fetch 코드를 사용하세요)
       /*
+      const formData = new FormData();
+      formData.append("image", file);
+      
       const response = await fetch(API_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ item: itemQuery })
+        body: formData
       });
       const data = await response.json();
       if(data.error) throw new Error(data.error);
       */
       
-      // 데모용 임시 코드
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // 데모용 가짜 지연 및 데이터 생성
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // 임시 결과 생성기 (데모용)
+      const fakeItems = ["플라스틱 생수병", "종이컵", "유리병", "캔", "비닐봉투", "낡은 옷"];
+      const randomName = fakeItems[Math.floor(Math.random() * fakeItems.length)];
+      
       const data = {
-          name: itemQuery,
-          category: "daily",
-          co2: (Math.random() * 5).toFixed(2),
-          water: Math.floor(Math.random() * 100)
+          name: "분석 완료: " + randomName,
+          category: "daily (생활용품)",
+          co2: (Math.random() * 2).toFixed(2),
+          water: Math.floor(Math.random() * 50)
       };
 
       document.getElementById("resName").textContent = data.name;
