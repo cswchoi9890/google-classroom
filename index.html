@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>AI 분리배출 (이미지 분석)</title>
+<title>AI 정밀 재질 분석 & 분리배출</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic+Coding:wght@400;700;800&family=Black+Han+Sans&display=swap" rel="stylesheet">
@@ -21,6 +21,7 @@
     background: radial-gradient(ellipse at 50% -10%, rgba(255,255,255,0.05), transparent 55%),
                 linear-gradient(160deg, var(--counter-1), var(--counter-2));
     padding:28px 16px 60px;
+    overflow-x: hidden;
   }
   .app{max-width:800px; margin:0 auto;}
   
@@ -31,7 +32,7 @@
   }
   .masthead h1{
     font-family:'Black Han Sans', sans-serif;
-    font-size:clamp(1.9rem, 5vw, 3rem);
+    font-size:clamp(1.7rem, 4vw, 2.5rem);
     margin:0;
     letter-spacing:0.02em;
     text-shadow:0 2px 0 rgba(0,0,0,0.35);
@@ -65,7 +66,7 @@
   
   #imagePreviewContainer {
     display: none; width: 100%; text-align: center;
-    background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px;
+    background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; position: relative;
   }
   #previewImg {
     max-width: 100%; max-height: 250px; border-radius: 8px; object-fit: contain;
@@ -81,47 +82,137 @@
     color: #f1ecdc;
     display: none;
     text-align: center;
+    margin-bottom: 30px;
   }
   .result-card h3 { margin-top: 0; font-size: 1.4rem; color: #fff; }
-  .result-card p { margin: 8px 0; font-size: 0.95rem; color: #a39c86; }
-  .result-card span { color: white; font-weight: bold; }
-  .category-badge {
-    display: inline-block; padding: 4px 12px; background: var(--eco); 
-    border-radius: 12px; font-size: 0.8rem; font-weight: bold; color: white; margin-bottom: 10px;
+  .result-card p { margin: 8px 0; font-size: 1rem; color: #cfe7d7; font-weight: bold; }
+  
+  /* 쓰레기통 섹션 (SVG Filters) */
+  .bins-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 20px;
+  }
+  .bin-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transition: all 0.5s ease;
+    opacity: 0.8;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3)); 
+  }
+  .bin-wrapper.active {
+    opacity: 1;
+    filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.9)) brightness(1.2);
+    transform: scale(1.15) translateY(-10px);
+    z-index: 10;
+  }
+  .bin-wrapper.inactive {
+    opacity: 0.2;
+    filter: grayscale(100%) blur(1.5px);
+  }
+  
+  .bin-svg {
+    width: 70px;
+    height: 90px;
+    margin-bottom: 8px;
+  }
+  .bin-label {
+    font-size: 0.8rem;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 1px 1px 2px #000;
+  }
+
+  .flying-item {
+    position: fixed;
+    object-fit: cover;
+    border-radius: 10px;
+    z-index: 9999;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    transition: all 1.2s cubic-bezier(0.25, 1, 0.3, 1);
+    pointer-events: none;
   }
 </style>
 </head>
 <body>
 <div class="app">
   <div class="masthead">
-    <h1>AI 분리배출 도우미</h1>
-    <p>버릴 물건의 사진을 업로드해주세요. AI가 이미지를 분석해 분리배출 방법을 알려드립니다.</p>
+    <h1>정밀 재질 분석 & 자동 분리배출</h1>
+    <p>이미지를 업로드하면 AI가 정확한 재질을 분석하여 알맞은 쓰레기통으로 이동시킵니다.</p>
   </div>
 
   <div class="ai-panel">
     <div class="file-input-wrapper">
       <input type="file" id="imageInput" accept="image/*" />
-      <button id="aiBtn">이미지 분석</button>
+      <button id="aiBtn">재질 분석 시작</button>
     </div>
     <div id="imagePreviewContainer">
       <img id="previewImg" alt="미리보기" />
     </div>
-    <div class="ai-loading" id="aiLoading">Cloudflare Vision AI가 이미지를 분석 중입니다... ♻️</div>
+    <div class="ai-loading" id="aiLoading">AI가 이미지의 정확한 재질을 분석하고 있습니다... 🔍</div>
   </div>
 
   <div class="result-card" id="resultCard">
-    <div class="category-badge" id="resCategory"></div>
     <h3 id="resName"></h3>
-    <p>예상 탄소 발자국: <span id="resCo2"></span> kg CO₂e</p>
-    <p>예상 물 발자국: <span id="resWater"></span> L</p>
+    <p>💡 식별된 재질: <span id="resMaterial" style="color:#f2c14e;"></span></p>
   </div>
+
+  <!-- SVG 쓰레기통 UI -->
+  <div class="bins-container" id="binsContainer">
+    <div class="bin-wrapper" data-bin="종이류">
+      <svg class="bin-svg" style="color:#4A90E2;" viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg">
+        <path d="M10,20 L90,20 L80,110 C79,115 75,120 70,120 L30,120 C25,120 21,115 20,110 L10,20 Z" fill="currentColor" opacity="0.9"/>
+        <rect x="25" y="5" width="50" height="15" rx="5" fill="currentColor"/>
+        <path d="M40,5 L40,0 L60,0 L60,5" stroke="currentColor" stroke-width="4" fill="none"/>
+        <line x1="35" y1="40" x2="35" y2="100" stroke="#fff" stroke-width="4" opacity="0.6" stroke-linecap="round"/>
+        <line x1="50" y1="40" x2="50" y2="100" stroke="#fff" stroke-width="4" opacity="0.6" stroke-linecap="round"/>
+        <line x1="65" y1="40" x2="65" y2="100" stroke="#fff" stroke-width="4" opacity="0.6" stroke-linecap="round"/>
+      </svg>
+      <span class="bin-label">종이류</span>
+    </div>
+    <div class="bin-wrapper" data-bin="플라스틱류">
+      <svg class="bin-svg" style="color:#50E3C2;" viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><use href="#bin-shape"/></svg>
+      <span class="bin-label">플라스틱류</span>
+    </div>
+    <div class="bin-wrapper" data-bin="캔/고철류">
+      <svg class="bin-svg" style="color:#F5A623;" viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><use href="#bin-shape"/></svg>
+      <span class="bin-label">캔/고철류</span>
+    </div>
+    <div class="bin-wrapper" data-bin="유리병류">
+      <svg class="bin-svg" style="color:#D0021B;" viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><use href="#bin-shape"/></svg>
+      <span class="bin-label">유리병류</span>
+    </div>
+    <div class="bin-wrapper" data-bin="비닐류">
+      <svg class="bin-svg" style="color:#BD10E0;" viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><use href="#bin-shape"/></svg>
+      <span class="bin-label">비닐류</span>
+    </div>
+    <div class="bin-wrapper" data-bin="일반쓰레기">
+      <svg class="bin-svg" style="color:#9B9B9B;" viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><use href="#bin-shape"/></svg>
+      <span class="bin-label">일반쓰레기</span>
+    </div>
+  </div>
+
+  <svg style="display:none;" xmlns="http://www.w3.org/2000/svg">
+    <g id="bin-shape">
+      <path d="M10,20 L90,20 L80,110 C79,115 75,120 70,120 L30,120 C25,120 21,115 20,110 L10,20 Z" fill="currentColor" opacity="0.9"/>
+      <rect x="25" y="5" width="50" height="15" rx="5" fill="currentColor"/>
+      <path d="M40,5 L40,0 L60,0 L60,5" stroke="currentColor" stroke-width="4" fill="none"/>
+      <line x1="35" y1="40" x2="35" y2="100" stroke="#fff" stroke-width="4" opacity="0.6" stroke-linecap="round"/>
+      <line x1="50" y1="40" x2="50" y2="100" stroke="#fff" stroke-width="4" opacity="0.6" stroke-linecap="round"/>
+      <line x1="65" y1="40" x2="65" y2="100" stroke="#fff" stroke-width="4" opacity="0.6" stroke-linecap="round"/>
+    </g>
+  </svg>
+
 </div>
 
 <script>
 (function(){
   "use strict";
   
-  // 백엔드 URL (Cloudflare Worker 배포 후 해당 도메인으로 변경)
+  // 사용자가 제공한 실제 Cloudflare Worker API URL
   const API_URL = "https://square-hat-47df.jiji15899.workers.dev/api/analyze";
   
   const $imageInput = document.getElementById("imageInput");
@@ -130,14 +221,21 @@
   const $aiBtn = document.getElementById("aiBtn");
   const $aiLoading = document.getElementById("aiLoading");
   const $resultCard = document.getElementById("resultCard");
+  const $bins = document.querySelectorAll('.bin-wrapper');
 
-  // 이미지 미리보기 처리
+  function resetBins() {
+    $bins.forEach(b => {
+      b.classList.remove('active', 'inactive');
+    });
+  }
+
   $imageInput.addEventListener("change", () => {
     const file = $imageInput.files[0];
     if(file) {
       $previewImg.src = URL.createObjectURL(file);
       $previewContainer.style.display = "block";
       $resultCard.style.display = "none";
+      resetBins();
     } else {
       $previewContainer.style.display = "none";
     }
@@ -146,53 +244,88 @@
   $aiBtn.addEventListener("click", async () => {
     const file = $imageInput.files[0];
     if(!file) {
-      alert("먼저 분석할 이미지를 업로드해주세요.");
+      alert("분석할 이미지를 먼저 업로드해주세요.");
       return;
     }
 
     $aiLoading.style.display = "block";
     $resultCard.style.display = "none";
+    resetBins();
 
     try {
-      // 로컬 테스트용 데모 코드 (실제 배포 시엔 아래의 주석 처리된 fetch 코드를 사용하세요)
-      /*
       const formData = new FormData();
       formData.append("image", file);
       
-      const response = await fetch(API_URL, {
-        method: "POST",
-        body: formData
+      // 실제 API 호출 
+      const response = await fetch(API_URL, { 
+        method: "POST", 
+        body: formData 
       });
+
+      if (!response.ok) {
+        throw new Error("서버 연결 실패. (API_URL에 배포된 워커 주소를 확인해주세요!)");
+      }
+      
       const data = await response.json();
       if(data.error) throw new Error(data.error);
-      */
-      
-      // 데모용 가짜 지연 및 데이터 생성
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // 임시 결과 생성기 (데모용)
-      const fakeItems = ["플라스틱 생수병", "종이컵", "유리병", "캔", "비닐봉투", "낡은 옷"];
-      const randomName = fakeItems[Math.floor(Math.random() * fakeItems.length)];
-      
-      const data = {
-          name: "분석 완료: " + randomName,
-          category: "daily (생활용품)",
-          co2: (Math.random() * 2).toFixed(2),
-          water: Math.floor(Math.random() * 50)
-      };
 
+      // 1. 재질 및 품목 텍스트 업데이트 (이전 코드의 구조와 맞게 설정)
       document.getElementById("resName").textContent = data.name;
-      document.getElementById("resCategory").textContent = data.category;
-      document.getElementById("resCo2").textContent = data.co2;
-      document.getElementById("resWater").textContent = data.water;
-      
+      document.getElementById("resMaterial").textContent = data.material;
       $resultCard.style.display = "block";
+
+      // 2. 알맞은 쓰레기통 찾기 및 SVG Filter 하이라이트
+      let targetBinEl = null;
+      $bins.forEach(b => {
+        if(b.dataset.bin === data.bin || data.bin.includes(b.dataset.bin)) {
+          targetBinEl = b;
+        }
+      });
+      if(!targetBinEl) targetBinEl = document.querySelector('[data-bin="일반쓰레기"]');
+
+      $bins.forEach(b => {
+        if(b === targetBinEl) b.classList.add('active');
+        else b.classList.add('inactive');
+      });
+
+      // 3. 쓰레기통으로 이동하는 애니메이션
+      triggerFlyAnimation(targetBinEl);
+
     } catch(err) {
-      alert("AI 분석 중 오류가 발생했습니다: " + err.message);
+      alert("AI 분석 실패: " + err.message);
     } finally {
       $aiLoading.style.display = "none";
     }
   });
+
+  function triggerFlyAnimation(targetEl) {
+    const rectPreview = $previewImg.getBoundingClientRect();
+    const rectTarget = targetEl.getBoundingClientRect();
+
+    const flying = document.createElement('img');
+    flying.src = $previewImg.src;
+    flying.className = 'flying-item';
+    
+    flying.style.top = rectPreview.top + 'px';
+    flying.style.left = rectPreview.left + 'px';
+    flying.style.width = rectPreview.width + 'px';
+    flying.style.height = rectPreview.height + 'px';
+    
+    document.body.appendChild(flying);
+    void flying.offsetWidth;
+
+    flying.style.top = (rectTarget.top + rectTarget.height/2 - 20) + 'px';
+    flying.style.left = (rectTarget.left + rectTarget.width/2 - 20) + 'px';
+    flying.style.width = '40px';
+    flying.style.height = '40px';
+    flying.style.opacity = '0';
+    flying.style.transform = 'rotate(360deg) scale(0.1)';
+
+    setTimeout(() => {
+      flying.remove();
+    }, 1200);
+  }
+
 })();
 </script>
 </body>
